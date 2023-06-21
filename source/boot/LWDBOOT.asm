@@ -58,76 +58,122 @@ bootloader_start: ; The starting point
 ; FAT12 File System Routines
 ;==================================
 
-find_root_dir:
-	pusha  			; We push all the general registers to the stack, in case something important was in them before this
+load_root_dir:
 	mov ax, [sectors_per_fat] 	; Move the value of the sectors_per_fat into the AX register
-	mov bx, [number_of_fats] 	; Move the number_of_fats into BX
+	mov bl, [number_of_fats] 	; Move the number_of_fats into BX
+	xor bh, bh 					; Set BH to zero
 	mul bx  					; AX = (number_of_fats * sectors_per_fat) = Size of the FAT reigon
 	add ax, [reserved_for_boot] ; AX = (Size of Reserved_For_Boot region + FAT region) = Location of the Root_Directory [Logical sector 19]
-	call lba2chs 				; Call LBA2CHS so we can read from the root_dir
+	push ax 
 
-	mov si, BUFFER 			; This is what we will put into ES:BX [Memory location we want to store our data]
-	mov bx, ds
-	mov es, bx
-	mov bx, si 				; We put the buffer into BX [So now ES:BX should point ot the buffer]
+	mov ax, [root_dir_entries] 	; We move the number of root_dir_entries
+	shl ax, 5 					; We shift it left 5 bits to multiply it by 32
+	xor dx, dx  				; Set DX to 0
+	div word [bytes_per_sector] ; Divide the sectors_per_fat by the bytes_per_sector
 
-	mov ah, 0x02 			; Read the disk
-	mov al, 14 			; Sectors to read
-
-	pusha 				; You know the drill by now, we need the values in these registers, need to modify them aswell, push them to the stack
-
-	jmp $
+	test dx, dx 				; Check to see if DX = 0
+	jz read_root_dir
+	inc ax 						; If DX doesn't equal 0, then that means we have a sector only partially filled with entries
 
 read_root_dir:
-	popa
-	pusha 
+	; Read Root Directory
+	mov cl, al 					; We set CL to the number of sectors to read
+	pop ax 						; We pop AX of the stack, this holds the location of the Root Directory
+	mov dl, [BOOTDEV] 			; Set dl to the Boot Device number
+	mov bx, BUFFER 				; set ES:BX to the buffer, this is where we will laod our code
+	call disk_read					; Read the Root Directory
 
-	stc
-	int 0x13 	; Read the disk
+	xor bx, bx 					; Set BX to zero, this will count the amount of entries we've already read
+	mov di, BUFFER 				; This will point to the loaction were loaded at
 
-	jmp $
-
-;==================================
-; Bootloader Disk Read Routines
-;==================================
-
-; Read the disk. AX: LBA Address, CL: Number of sectors to read, upto 128 (Altough reasonably we won't need it to be that big)
-disk_read:  		; DL: drive number, ES:BX Memory address where we want to store data
-	; We push the registers we're going to modify to the stack
-	; Save the CL register (Number of sectors to read)
-	pusha
-
-	push cx 		; We push CX to the stack twice because, PUSHA doesn't put it on top of the stack.
-	call lba2chs 	; Calcuate CHS
-	pop ax		; The sector count was saved to the stack, so we pop it
-
-	mov ah, 0x02 	; Tells the BIOS that we want to read from the disk when we invoke INT 13H
-	mov di, 5 		; Set SI to 5, this will be our retry counter.
-
-.retry:
-	pusha
-	stc 		; Some BIOS'es don't properly set the carry flag.
-	int 0x13 	; We call the Disk Routines interrupt
-	jnc .fin 	; If the carry flag is set to 0, then that means the we successfully read from the disk, otherwise there was an error
-	popa
-	call disk_reset
-	dec di 		; We decrement our counter
-	cmp di, 0	; We check to see if our counter is 0
-	jnz .retry 	; If it's not, then we jump back to the retry label
-
-.fail:
-	jmp floppy_error
-
-.fin:
-	popa
-
+search_for_kernel:
+	mov si, KERN_FILENAME 		; Move the filename into SI
+	mov cx, 11 					; Move 11 into CX, this is the amount of times we want to repeat CMPSB
+	push di
+	repe cmpsb 					; This will compare ES:DI to DS:SI to see if we have found the kernel file
 	pop di
-	pop dx
-	pop cx
-	pop bx
-	pop ax 	; Pop the modified registers
+	je found_kernel
 
-	ret
+	add di, 32 					; We go to the next entry, one entry is 32 bytes
+	inc bx 						; increment our count
+	cmp bx, [root_dir_entries] 	; See if we've checked all the entries yet
+	jl search_for_kernel 		; if we haven't, try the next entry
+	
+	jmp kernel_not_found 		; Otherwise, tell the user that we couldn't find the kernel.bin file
+found_kernel:
+	mov ax, [di + 26] 			; DI still holds the buffer addres, we add 26 to this, which points to the first cluster value
+	mov [KERNEL_CLUSTER], ax
+
+	; Load FAT from disk into memory
+	mov ax, [reserved_for_boot]
+	mov bx, BUFFER
+	mov cl, [sectors_per_fat]
+	mov dl, [BOOTDEV]
+	call disk_read
+
+	; Read Kernel, and process FAT cluster chain
+	mov bx, KERNEL_SEGMENT
+	mov es, bx
+	mov bx, KERNEL_OFFSET
+load_kernel:
+	; Read next cluster
+	mov ax, [KERNEL_CLUSTER]
+	
+	add ax, 31 
+
+	mov cl, 1
+	mov dl, [BOOTDEV]
+	call disk_read
+
+	add bx, [bytes_per_sector]
+
+	; Compute location of the next cluster
+	mov ax, [KERNEL_CLUSTER]
+	mov cx, 3
+	mul cx
+	mov cx, 2
+	div cx
+
+	mov si, BUFFER
+	add si, ax
+	mov ax, word [ds:si]
+
+	or dx, dx 		; If DX = 0, cluster is even, If DX = 1, cluster is odd
+
+	jz even
+
+odd:
+	shr ax, 4 		; We cut off those extra 4 bits, those belong to another cluster
+	jmp short next_cluster
+even:
+	and ax, 0x0fff 	; Mask out final 4 bits
+
+next_cluster:
+	cmp ax, 0x0ff8 	; File end marker in FAT
+	jae start_kernel 		; If it is that means we have successfully read the kernel, and are now reday to jump to it
+
+	mov [KERNEL_CLUSTER], ax
+	jmp load_kernel
+
+start_kernel:
+	mov dl, [BOOTDEV] 		; Set dl for the kernel
+
+	mov ax, KERNEL_SEGMENT
+	mov ds, ax
+	mov es, ax
+
+	jmp KERNEL_SEGMENT:KERNEL_OFFSET
+
+
+;=======================
+; Error Handlers
+;=======================
+
+kernel_not_found:
+	mov si, msg_kern_not_found
+	call bootloader_print
+	call reboot
+	hlt
 
 floppy_error:
 	mov si, msg_flpy_err
@@ -135,13 +181,62 @@ floppy_error:
 	call reboot
 	hlt
 
-disk_reset:
-	pusha
-	mov ah, 0x00
+;=================================
+; Disk Read Routines
+;=================================
+disk_reset: 		; In goes the BOOTDEV, out comes... nothing, well unless something went wrong, in which case it will set the carry flag
+	push ax
+	push dx
+	mov ah, 0x00 		; Reset the disk
+	mov dl, byte [BOOTDEV] 	; Move the BOOTDEV into dl
 	stc
 	int 0x13
-	jc floppy_error
-	popa
+	pop ax
+	pop dx
+	ret
+
+
+disk_read:
+
+    push ax                             ; Save registers we will modify
+    push bx
+    push cx
+    push dx
+    push di
+
+    push cx                             ; We push CX twice because the previous operations didn't push CX to the top of the Stack
+    call lba2chs                     ; Compute the CHS
+    pop ax                              ; AL = number of sectors to read
+    
+    mov ah, 0x02
+    mov di, 3                           ; Retry count
+
+.r:
+    pusha                               ; Save all registers, we don't know what BIOS modifies
+    stc                                 ; set carry flag, some BIOS'es don't set it
+    int 0x13                             
+    jnc .fin                           ; If there's no error pop sll the registers off the stack
+
+    ; The Read failed, so we pop all the registers off the stack and then reset the disk.
+    popa
+    call disk_reset
+
+    dec di 			; Decrement the counter
+    test di, di
+    jnz .r
+
+.fail:
+    ; All attempts are exhausted
+    jmp floppy_error
+
+.fin:
+    popa
+
+    pop di
+    pop dx
+    pop cx
+    pop bx
+    pop ax                             ; Restore registers modified
 	ret
 
 ;==========================================
@@ -156,7 +251,7 @@ bootloader_print:
 	or al, al		; We check to see if al is 0 (no more characters to print). cmp al, 0 should also work.
 	jz .done 		; If that's true we jump to .done
 	mov ah, 0x0e 	; We tell INT 10H that we want to start printing characters
-	int 10h 		; Video Interrupt
+	int 0x10 		; Video Interrupt
 	jmp .repeat 	; Jump back to .repeat
 
 .done: 		; Finish printing characters
@@ -164,9 +259,9 @@ bootloader_print:
 	ret			; We return to where we were before
 
 reboot:
-	mov ax, 0 	; Wait for keystroke
+	mov ax, 0x00 	; Wait for keystroke
 	int 0x16
-	mov ax, 0
+	mov ax, 0x00
 	int 0x19 	; Reboot System
 
 lba2chs:
@@ -197,13 +292,16 @@ lba2chs:
 	ret
 
 BOOTDEV db 0 	; The boot device number, 0 for the A drive (AKA floppy disk)
-CLUSTER dw 0 	; The cluster of the file we want to load
-POINTER dw 		; The pointer into our buffer [This is for loading the kernel]
+KERNEL_CLUSTER dw 0 	; The cluster of the file we want to load
 
 KERN_FILENAME db "LWDKRNL BIN" 	; Filenames in MS-DOS [And older OSes similar to] had to be 11 bytes long, like our Volume label, remember
 
 msg_booting db "Booting LWD_DOS...", 0x0d, 0x0a, 0 ; 0x0D and 0x0A form what is equivilant to a C++ endl. And 0 is the null terminator
-msg_flpy_err db "DISK ERROR! PRESS ANY KEY TO RESTART", 0
+msg_flpy_err db "DISK ERROR!", 0
+msg_kern_not_found db "LWDKRNL.BIN NOT FOUND !", 0x0d, 0x0a, 0
+
+KERNEL_SEGMENT equ 0x2000
+KERNEL_OFFSET equ 0x0000
 
 times 510 - ($-$$) db 0 ; Pad out the rest of the program with 0s
 dw 0xaa55 ; Boot Signature
