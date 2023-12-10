@@ -58,6 +58,23 @@ command_line_interface:
     call os_compare_strings
     jc near restart_command
 
+    mov di, ver_str
+    call os_compare_strings
+    jc near ver_command
+
+    mov di, cls_str
+    call os_compare_strings
+    jc near cls_command
+
+    mov di, echo_str
+    call os_compare_strings
+    jc near echo_command
+
+    ; If the user did not input a valid command
+    mov si, krnl_msg_invalid
+    call os_print_new_line
+    call os_print_string
+
 .sta:
     call os_print_new_line
 
@@ -71,7 +88,7 @@ command_line_interface:
 ; Commands
 about_command:
     call os_print_new_line
-    mov si, krnl_msg_ver
+    mov si, krnl_msg_about
     call os_print_string
     call os_print_new_line
 
@@ -85,15 +102,49 @@ help_command:
 
     jmp command_line_interface
 
+ver_command:
+    call os_print_new_line
+    mov si, krnl_msg_ver
+    call os_print_string
+    call os_print_new_line
+
+    jmp command_line_interface
+
+cls_command:
+    call os_clear_screen
+    
+    jmp command_line_interface
+
 restart_command:
     mov ax, 0x00
     int 0x19
+
+echo_command:
+
+    ; Get string to print
+
+    pusha
+
+    call os_print_new_line
+    mov si, krnl_msg_echo_string
+    call os_print_string
+    mov ax, input
+    call os_input_string
+    mov si, input
+    call os_print_new_line
+    call os_print_string
+    call os_print_new_line
+
+    popa
+
+    jmp command_line_interface
 
 ; This just copies the code in the include file here, basically is the same as just writing the functions here.
 
 %include "syscalls/print.asm"
 %include "syscalls/keyboard.asm"
 %include "syscalls/strings.asm"
+%include "syscalls/screen.asm"
 
 prompt db "> ", 0               ; This is just what appears before your cursor
 
@@ -103,10 +154,17 @@ cls_str db "cls", 0
 help_str db "help", 0
 ver_str db "ver", 0
 restart_str db "restart", 0
+echo_str db "echo", 0
 
 input times 32 db 0             ; Since we're going to be putting our input into here, we need to set aside some bytes for the input
 
-krnl_msg_loaded db "LWD_DOS was successfully loaded!", 0x0d, 0x0a, 0
-krnl_msg_ver db "LWD_DOS Version 1.0 Copyright(c) BlueSillyDragon 2023", 0x0d, 0x0a, 0
+; Kernel's messages
 
-krnl_msg_help db "COMMANDS: about, help, restart", 0x0d, 0x0a, 0
+krnl_msg_loaded db "LWD-DOS was successfully loaded!", 0x0d, 0x0a, 0
+krnl_msg_ver db "LWD-DOS Version 1.0 Copyright(c) BlueSillyDragon 2023", 0x0d, 0x0a, 0
+krnl_msg_about db "Version: LWD-DOS 1.0, Running in 16-bit real mode, Made in 2023", 0x0d, 0x0a, 0
+krnl_msg_echo_string db "Input string to relay: ", 0x0d, 0x0a, 0
+
+krnl_msg_help db "COMMANDS: about, help, ver, cls, echo, restart", 0x0d, 0x0a, 0
+
+krnl_msg_invalid db "INVALID COMMAND!", 0x0d, 0x0a, 0
