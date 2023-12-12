@@ -72,11 +72,6 @@ os_read_disk:
     jmp os_floppy_error
 
 .fin:
-
-    mov al, 'H'
-    mov ah, 0x0e
-    int 0x10
-
     popa
 
     pop di
@@ -88,6 +83,7 @@ os_read_disk:
     ret    
 
 os_load_root_dir:
+
     mov ax, [sectors_per_fat]
     mov bl, [number_of_fats]
     xor bh, bh
@@ -102,7 +98,6 @@ os_load_root_dir:
 
     test dx, dx
     jz os_read_root_dir
-    inc ax
 
 os_read_root_dir:
     mov cl, al
@@ -114,18 +109,49 @@ os_read_root_dir:
     xor bx, bx
     mov di, disk_buffer
 
+    ret
+
 os_get_file_list:
     call os_load_root_dir
     mov cx, 11
+    add di, 32
     
 .loop:
-    push ax
-    push di
     mov al, [di]
-    mov di, filename
-    repe stosb
-    pop di
-    pop ax
+    mov ah, 0x0e
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+    inc di
+    mov al, [di]
+    int 0x10
+
+    call os_print_new_line
 
     ret
 
