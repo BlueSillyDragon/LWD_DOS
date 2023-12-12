@@ -196,10 +196,6 @@ list_working_directory_command:
 
     call os_get_file_list
 
-    ;call os_load_root_dir
-    mov si, filename
-    call os_print_string
-
     popa
 
     jmp command_line_interface
