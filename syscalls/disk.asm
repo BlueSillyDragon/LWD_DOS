@@ -113,43 +113,36 @@ os_read_root_dir:
 
 os_get_file_list:
     call os_load_root_dir
-    mov cx, 11
     add di, 32
+    mov bx, 0
     
+.get_file_name:
+    mov ah, 0x0e
+    mov cx, 11
+    push di
+
 .loop:
     mov al, [di]
-    mov ah, 0x0e
     int 0x10
+
+    cmp cx, 0
+    je .next_entry
     inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
-    inc di
-    mov al, [di]
-    int 0x10
+    dec cx
+    jmp .loop
+
+.next_entry:
+    call os_print_new_line
+    pop di
+    add di, 32
+    mov ax, [di]
+    cmp ax, 0
+    je .done
+    inc bx
+    cmp bx, [root_dir_entries]
+    jne .get_file_name
+
+.done:
 
     call os_print_new_line
 
