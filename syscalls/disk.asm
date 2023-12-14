@@ -114,7 +114,7 @@ os_read_root_dir:
 os_get_file_list:
     call os_load_root_dir
     add di, 32
-    mov bx, 0
+    xor bx, bx
     
 .get_file_name:
     mov ah, 0x0e
@@ -148,6 +148,101 @@ os_get_file_list:
 
     ret
 
+; IN: SI should hold the FILENAME of the program we're trying to run
+
+execute_program:
+    call os_load_root_dir
+    jmp start
+
+start:
+
+    mov al, 'H'
+    mov ah, 0x0e
+    int 0x10
+    mov si, SETUP_FILENAME
+	mov cx, 11 					
+	push di
+	repe cmpsb 					
+	pop di
+	je found_kernel
+
+	add di, 32 					
+	inc bx 						
+	cmp bx, [root_dir_entries]
+	jl start 		
+	
+	jmp kernel_not_found 		
+found_kernel:
+
+	mov ax, [di + 26] 			
+	mov [FILE_CLUSTER], ax
+
+
+	mov ax, [reserved_for_boot]
+	mov bx, disk_buffer
+	mov cl, [sectors_per_fat]
+	mov dl, [bootdev]
+	call os_read_disk
+
+
+	mov bx, FILE_SEGMENT
+	mov es, bx
+	mov bx, FILE_OFFSET
+load_kernel:
+
+	mov ax, [FILE_CLUSTER]
+	
+	add ax, 31 
+
+	mov cl, 1
+	mov dl, [bootdev]
+	call os_read_disk
+
+	add bx, [bytes_per_sector]
+
+
+	mov ax, [FILE_CLUSTER]
+	mov cx, 3
+	mul cx
+	mov cx, 2
+	div cx
+
+	mov si, disk_buffer
+	add si, ax
+	mov ax, word [ds:si]
+
+	or dx, dx
+
+	jz even
+
+odd:
+	shr ax, 4 
+	jmp short next_cluster
+even:
+	and ax, 0x0fff 	
+
+next_cluster:
+	cmp ax, 0x0ff8
+	jae start_kernel
+
+	mov [FILE_CLUSTER], ax
+	jmp load_kernel
+
+start_kernel:
+	mov dl, [bootdev]
+
+	mov ax, FILE_SEGMENT
+	mov ds, ax
+	mov es, ax
+
+    push ax
+
+	jmp FILE_SEGMENT:FILE_OFFSET
+
+kernel_not_found:
+    mov si, krnl_msg_file_not_found
+    call os_print_string
+    ret
 
 
 bootdev db 0
@@ -163,3 +258,8 @@ sectors_per_track dw 18
 number_of_heads dw 2
 
 root_dir_entries dw 224
+
+FILE_CLUSTER dw 0
+
+FILE_SEGMENT equ 0x5000
+FILE_OFFSET equ 0x0000
