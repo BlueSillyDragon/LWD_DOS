@@ -81,7 +81,17 @@ command_line_interface:
 
     mov di, setup_str
     call os_compare_strings
-    jc near setup_command
+    jc near execute_setup_program
+
+    ; See if the user is trying to execute the kernel file
+    mov di, KERNEL_FILENAME
+    call os_compare_strings
+    jc near kernel_execution_attempt
+
+    ; See if they are trying to execute a program
+    mov di, SETUP_FILENAME
+    call os_compare_strings
+    jc near execute_setup_program
 
     ; If the user did not input a valid command
     mov si, krnl_msg_invalid
@@ -200,54 +210,14 @@ list_working_directory_command:
 
     jmp command_line_interface
 
-setup_command:
-    popa
-
-    mov dx, 0
-    call os_move_cursor
-
-    mov ah, 0x06
-    mov al, 0x00
-    mov bh, 0x1f
-    mov cx, 0
-    mov dh, 24
-    mov dl, 79
-    int 0x10
-
-    mov si, krnl_msg_setup_environment
-    call os_print_string
-
+kernel_execution_attempt:
+    mov si, krnl_msg_kernel_exec_attempt
     call os_print_new_line
-    call os_print_new_line
-
-    mov si, krnl_msg_input_month
     call os_print_string
-
-    call os_input_string
-
-    call os_print_new_line
-
-    mov si, krnl_msg_input_day
-    call os_print_string
-
-    call os_input_string
-
-    call os_print_new_line
-
-    mov si, krnl_msg_input_year
-    call os_print_string
-
-    call os_input_string
-
-    call os_print_new_line
-
-    mov si, krnl_msg_setup_done
-    call os_print_string
-    call os_keystroke
-    
-    call os_clear_screen
-
     jmp command_line_interface
+
+execute_setup_program:
+    call execute_program
 
 os_floppy_error:
 
@@ -300,14 +270,22 @@ krnl_msg_setup_done db "Setup Finished, press any key to return to LWD-DOS", 0x0
 
 krnl_msg_echo_string db "Input string to relay: ", 0x0d, 0x0a, 0
 
-krnl_msg_current_directory db "/A:", 0x0d, 0x0a, 0
+krnl_msg_current_directory db "/A:  ", 0x0d, 0x0a, 0
 
 krnl_msg_restart_confirmation db "Are you sure you want to restart? (y/n)", 0x0d, 0x0a, 0
 krnl_msg_invalid_option db "INVALID OPTION! PLEASE TRY AGAIN! (Make sure it's in lowercase)", 0x0d, 0x0a, 0
+
+krnl_msg_kernel_exec_attempt db "You cannot run the KERNEL file!", 0x0d, 0x0a, 0
+krnl_msg_file_not_found db "No such file or program!", 0x0d, 0x0a, 0
 
 krnl_msg_help db "COMMANDS: about, help, ver, setup, cls, echo, dir, restart", 0x0d, 0x0a, 0
 
 krnl_msg_invalid db "No such command!", 0x0d, 0x0a, 0
 krnl_msg_floppy_error db "FATAL ERROR TRYING TO READ FROM DISK! PRESS ANY BUTTON TO RESTART!", 0x0d, 0x0a, 0
+
+KERNEL_FILENAME db "LWDKRNL", 0
+
+; Program File Names
+SETUP_FILENAME db "SETUP   BIN"
 
 disk_buffer:
