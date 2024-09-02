@@ -18,9 +18,14 @@ os_print_string:
     popa
     ret
 
-os_clear_screen:
+os_print_new_line:
     pusha
-    mov ah, 0x00
-    mov al, 0x03    ; Sets video mode to color text
+    mov ah, 0x0e
+    mov al, 0x0d
     int 0x10
+    mov al, 0x0a
+    int 0x10
+
+.done:
     popa
+    ret

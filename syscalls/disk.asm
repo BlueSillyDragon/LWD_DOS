@@ -156,9 +156,6 @@ execute_program:
 
 start:
 
-    mov al, 'H'
-    mov ah, 0x0e
-    int 0x10
     mov si, SETUP_FILENAME
 	mov cx, 11 					
 	push di

@@ -44,6 +44,13 @@ $(SRC_DIR)/SETUP.bin:
 	$(ASM) $(SRC_DIR)/programs/SETUP.asm -f bin -o $(SRC_DIR)/programs/SETUP.bin
 
 #
+# Run
+#
+run: floppy_image
+	qemu-system-i386 -fda $(BUILD_DIR)/LWD_DOS.img
+
+
+#
 # Always
 #
 always: 
@@ -54,3 +61,5 @@ always:
 #
 clean: 
 	rm -rf $(BUILD_DIR)/*
+	rm $(SRC_DIR)/boot/LWDBOOT.bin
+	rm $(SRC_DIR)/LWDKRNL.bin
