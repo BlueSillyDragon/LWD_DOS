@@ -155,8 +155,7 @@ execute_program:
     jmp start
 
 start:
-
-    mov si, SETUP_FILENAME
+    mov si, [filename]
 	mov cx, 11 					
 	push di
 	repe cmpsb 					
@@ -240,9 +239,6 @@ kernel_not_found:
     mov si, krnl_msg_file_not_found
     call os_print_string
     ret
-
-
-bootdev db 0
 
 reserved_for_boot dw 1
 

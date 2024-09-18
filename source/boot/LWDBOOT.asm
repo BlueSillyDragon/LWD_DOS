@@ -29,7 +29,7 @@ large_sectors 		dd 0 	; The amount of large sectors
 drive_number 		dw 0 	; Tne drive number [0x00 for floppy, and 0x80 for a hard disk]. This number is practically useless since the media is likely to be moved to a different machine with a different drive number
 signature 		db 0x29 		; The Volume's Signature (Should be either 0x29 or 0x28)
 volume_id 		dd 020e04031h		; The volume id, this can really be any number
-volume_label 		db "LWD_DOS    " 	; The volume label. This can be any 11 chars, this will be padded out with spaces.
+volume_label 		db "LWD-DOS1   " 	; The volume label. This can be any 11 chars, this will be padded out with spaces.
 file_system 		db "FAT12   " 		; The File System Type. DON'T TOUCH!!!
 
 ;==============================
@@ -291,7 +291,7 @@ lba2chs:
 	pop ax
 	ret
 
-BOOTDEV db 0 	; The boot device number, 0 for the A drive (AKA floppy disk)
+BOOTDEV db 0x00 	; The boot device number, 0 for the A drive (AKA floppy disk)
 KERNEL_CLUSTER dw 0 	; The cluster of the file we want to load
 
 KERN_FILENAME db "LWDKRNL BIN" 	; Filenames in MS-DOS [And older OSes similar to] had to be 11 bytes long, like our Volume label, remember

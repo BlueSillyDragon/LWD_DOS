@@ -12,6 +12,8 @@ kernel_start:
     mov al, 0x03
     int 0x10
 
+    mov [bootdev], dl
+
     mov si, krnl_msg_loaded     ; Print our messages
     call os_print_string
 
@@ -28,6 +30,19 @@ kernel_start:
     call os_print_new_line
 
 command_line_interface:
+
+    mov dl, [bootdev]
+
+    cmp dl, 0x00
+    je a_drive
+
+    cmp dl, 0x01
+    je b_drive
+
+    cmp dl, 0x80
+    je c_drive
+
+print_prompt:
 
     mov si, prompt      ; Print the command prompt
     call os_print_string
@@ -86,6 +101,10 @@ command_line_interface:
     mov di, bsod_str
     call os_compare_strings
     jc near bsod_command
+
+    mov di, pong_str
+    call os_compare_strings
+    jc near execute_pong
 
     ; See if the user is trying to execute the kernel file
     mov di, KERNEL_FILENAME
@@ -252,7 +271,22 @@ kernel_execution_attempt:
     jmp command_line_interface
 
 execute_setup_program:
+    push si
+    mov si, SETUP_FILENAME
+    mov [filename], si
+    pop si
+
     call execute_program
+
+execute_pong:
+    push si
+    mov si, PONG_FILENAME
+    mov [filename], si
+    pop si
+
+    call execute_program
+
+    jmp command_line_interface
 
 os_floppy_error:
 
@@ -261,6 +295,30 @@ os_floppy_error:
 
     call os_keystroke
     call restart_command
+
+;========================================
+; Misc
+;========================================
+
+; Change drive letter depending on DL
+
+a_drive:
+    mov al, 'A'
+    mov ah, 0x0e
+    int 0x10
+    jmp print_prompt
+
+b_drive:
+    mov al, 'B'
+    mov ah, 0x0e
+    int 0x10
+    jmp print_prompt
+
+c_drive:
+    mov al, 'C'
+    mov ah, 0x0e
+    int 0x10
+    jmp print_prompt
 
 ; This just copies the code in the include file here, basically is the same as just writing the functions here.
 
@@ -271,7 +329,7 @@ os_floppy_error:
 %include "syscalls/disk.asm"
 %include "syscalls/error.asm"
 
-prompt db "A:\>", 0               ; This is just what appears before your cursor
+prompt db ":\>", 0               ; This is just what appears before your cursor
 
 ; Command strings
 about_str db "about", 0
@@ -284,16 +342,19 @@ dir_str db "dir", 0
 setup_str db "setup", 0
 time_str db "time", 0
 bsod_str db "bsod", 0
+type_str db "type", 0
+pong_str db "pong", 0
 
 input times 32 db 0             ; Since we're going to be putting our input into here, we need to set aside some bytes for the input
 filename times 11 db 0
 error_code db 0
+bootdev db 0
 
 ; Kernel's messages
 
 krnl_msg_loaded db "LWD-DOS was successfully loaded!", 0x0d, 0x0a, 0
-krnl_msg_ver db "LWD-DOS Version 1.1 Copyright(c) BlueSillyDragon 2023", 0x0d, 0x0a, 0
-krnl_msg_about db "Version: LWD-DOS 1.1.3.9809012024, Running in 16-bit real mode, Made in 2023", 0x0d, 0x0a, 0
+krnl_msg_ver db "LWD-DOS Version 1.1 Copyright(c) BlueSillyDragon 2023-2024", 0x0d, 0x0a, 0
+krnl_msg_about db "Version: LWD-DOS 1.1.4.9909022024, Running in 16-bit real mode, Made in 2023", 0x0d, 0x0a, 0
 krnl_msg_type_setup db "Type 'setup' to set the date", 0x0d, 0x0a, 
 
 krnl_msg_type_help db "Type 'help' for a list of commands.", 0x0d, 0x0a, 0
@@ -326,12 +387,13 @@ krnl_msg_help7 db "echo - Prints given string to screen", 0x0d, 0x0a, 0
 krnl_msg_help8 db "dir - Shows current directory", 0x0d, 0x0a, 0
 krnl_msg_help9 db "restart - Restarts the system", 0x0d, 0x0a, 0
 
-krnl_msg_invalid db "No such command!", 0x0d, 0x0a, 0
+krnl_msg_invalid db "No such command or file!", 0x0d, 0x0a, 0
 krnl_msg_floppy_error db "FATAL ERROR TRYING TO READ FROM DISK! PRESS ANY BUTTON TO RESTART!", 0x0d, 0x0a, 0
 
 KERNEL_FILENAME db "LWDKRNL", 0
 
 ; Program File Names
 SETUP_FILENAME db "SETUP   BIN"
+PONG_FILENAME db "PONG    BIN"
 
 disk_buffer:

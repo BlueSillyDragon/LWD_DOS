@@ -10,12 +10,13 @@ BUILD_DIR=build
 #
 floppy_image: $(BUILD_DIR)/LWD_DOS.img
 
-$(BUILD_DIR)/LWD_DOS.img: bootloader kernel setup
+$(BUILD_DIR)/LWD_DOS.img: bootloader kernel setup pong
 	dd if=/dev/zero of=$(BUILD_DIR)/LWD_DOS.img bs=512 count=2880
 	mkfs.fat -F 12 -n "LWD_DOS" $(BUILD_DIR)/LWD_DOS.img
 	dd if=$(SRC_DIR)/boot/LWDBOOT.bin of=$(BUILD_DIR)/LWD_DOS.img conv=notrunc
 	mcopy -i $(BUILD_DIR)/LWD_DOS.img $(SRC_DIR)/LWDKRNL.bin "::LWDKRNL.bin"
 	mcopy -i $(BUILD_DIR)/LWD_DOS.img $(SRC_DIR)/programs/SETUP.bin "::SETUP.bin"
+	mcopy -i $(BUILD_DIR)/LWD_DOS.img $(SRC_DIR)/programs/PONG.bin "::PONG.bin"
 
 #
 # Bootloader
@@ -36,12 +37,20 @@ $(SRC_DIR)/LWDKRNL.bin:
 # Programs
 
 #
-# Kernel
+# Setup
 #
 setup: $(SRC_DIR)/SETUP.bin
 
 $(SRC_DIR)/SETUP.bin:
 	$(ASM) $(SRC_DIR)/programs/SETUP.asm -f bin -o $(SRC_DIR)/programs/SETUP.bin
+
+#
+# Pong
+#
+pong: $(SRC_DIR)/PONG.bin
+
+$(SRC_DIR)/PONG.bin:
+	$(ASM) $(SRC_DIR)/programs/PONG/PONG.asm -f bin -o $(SRC_DIR)/programs/PONG.bin
 
 #
 # Run

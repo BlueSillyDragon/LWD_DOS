@@ -48,8 +48,17 @@ check_for_error_code:
 
     mov bx, [error_code]
 
+.forcefully_invoked:
     cmp bx, 0x0a
     je forcefully_invoked
+
+.disk_read_error:
+    cmp bx, 0x02
+    je disk_read_issue
+
+.disk_write_error:
+    cmp bx, 0x03
+    je disk_write_issue
 
 continue:
 
@@ -75,8 +84,20 @@ forcefully_invoked:
     call os_print_new_line
     jmp continue
 
-disk_issue:
+disk_read_issue:
+    mov dx, 20
+    mov dh, 14
+    call os_move_cursor
     mov si, disk_issue_message
+    call os_print_string
+    call os_print_new_line
+    jmp continue
+
+disk_write_issue:
+    mov dx, 22
+    mov dh, 14
+    call os_move_cursor
+    mov si, diskw_issue_message
     call os_print_string
     call os_print_new_line
     jmp continue
@@ -86,4 +107,5 @@ system_error_message2 db "Your Operating System has been stopped to prevent dama
 ctrl_alt_del_message db "*Press Ctrl + Alt + Del to restart your system", 0
 forcefully_invoked_message db "Error code 0x0A - Forcefully Invoked!", 0
 disk_issue_message db "Error code 0x02 - Disk Read Error!", 0
+diskw_issue_message db "Error code 0x03 - Disk Write Error!", 0
 restart_message db "Press any key to continue", 0
